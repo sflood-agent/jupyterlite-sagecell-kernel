@@ -575,9 +575,9 @@ __metadata:
   languageName: node
   linkType: hard
 
-"@jupyterlite/echo-kernel@workspace:.":
+"@jupyterlite/sagecell-kernel@workspace:.":
   version: 0.0.0-use.local
-  resolution: "@jupyterlite/echo-kernel@workspace:."
+  resolution: "@jupyterlite/sagecell-kernel@workspace:."
   dependencies:
     "@jupyterlab/application": ^4.5.0
     "@jupyterlab/builder": ^4.5.0
