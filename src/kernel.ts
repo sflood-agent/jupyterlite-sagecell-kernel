@@ -2,58 +2,114 @@
 // Distributed under the terms of the Modified BSD License.
 
 import type { KernelMessage } from '@jupyterlab/services';
-
 import { BaseKernel } from '@jupyterlite/services';
 
-/**
- * A kernel that echos content back.
- */
-export class EchoKernel extends BaseKernel {
-  /**
-   * Handle a kernel_info_request message
-   */
-  async kernelInfoRequest(): Promise<KernelMessage.IInfoReplyMsg['content']> {
-    const content: KernelMessage.IInfoReply = {
-      implementation: 'Text',
+const SAGECELL_SERVER = 'https://sagecell.sagemath.org';
+const DEFAULT_HEIGHT = 520;
+
+function escapeHtmlAttr(value: string): string {
+  return value
+    .replace(/&/g, '&amp;')
+    .replace(/"/g, '&quot;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;');
+}
+
+function makeIframeHtml(
+  code: string,
+  linkKey: string,
+  height = DEFAULT_HEIGHT
+): string {
+  const inner = `@doctype html
+<html>
+<head>
+  <meta charset="utf-8" />
+  <script src="${SAGECELL_SERVER}/static/embedded_sagecell.js"></script>
+  <link rel="stylesheet" href="${SAGECELL_SERVER}/static/sagecell_embed.css" />
+  <style>
+    html, body {
+      margin: 0;
+      padding: 0;
+      background: white;
+      font-family: sans-serif;
+    }
+    #host {
+      padding: 6px;
+    }
+  </style>
+</head>
+<body>
+  <div id="host"></div>
+  <script>
+    const host = document.getElementById('host');
+    const code = ${JSON.stringify(code)};
+
+    const scriptTag = document.createElement('script');
+    scriptTag.type = 'text/x-sage';
+    scriptTag.text = code;
+    host.appendChild(scriptTag);
+
+    sagecell.makeSagecell({
+      inputLocation: '#host',
+      languages: ['sage'],
+      autoeval: true,
+      linked: true,
+      linkKey: ${JSON.stringify(linkKey)},
+      replaceOutput: true,
+      hide: ['editor', 'evalButton', 'language', 'permalink', 'messages', 'sessionTitle']
+    });
+  </script>
+</body>
+</html>`;
+
+  const srcdoc = escapeHtmlAttr(inner);
+
+  return `<iframe style="width:100%; min-height:${height}px; border:0;" referrerpolicy="no-referrer" srcdoc="${srcdoc}"></iframe>`;
+}
+
+export class SageCellKernel extends BaseKernel {
+  private readonly linkKey = crypto.randomUUID();
+
+  async kernelInfoRequest(): Promise<KernelMessage.IInfoReply> {
+    return {
+      implementation: 'SageCell Remote Wrapper',
       implementation_version: '0.1.0',
       language_info: {
-        codemirror_mode: {
-          name: 'text/plain'
-        },
-        file_extension: '.txt',
-        mimetype: 'text/plain',
-        name: 'echo',
-        nbconvert_exporter: 'text',
-        pygments_lexer: 'text',
-        version: 'es2017'
+        codemirror_mode: { name: 'python' },
+        file_extension: '.sage',
+        mimetype: 'text/x-python',
+        name: 'sage',
+        nbconvert_exporter: 'python',
+        pygments_lexer: 'python',
+        version: 'unknown'
       },
       protocol_version: '5.3',
       status: 'ok',
-      banner: 'An echo kernel running in the browser',
+      banner: 'A browser kernel that wraps SageMathCell in iframe output',
       help_links: [
         {
-          text: 'Echo Kernel',
-          url: 'https://github.com/jupyterlite/echo-kernel'
+          text: 'JupyterLite custom kernels',
+          url: 'https://jupyterlite.readthedocs.io/en/latest/howto/extensions/kernel.html'
+        },
+        {
+          text: 'SageMathCell embedding',
+          url: 'https://github.com/sagemath/sagecell/blob/master/doc/embedding.rst'
         }
       ]
     };
-    return content;
   }
 
-  /**
-   * Handle an `execute_request` message
-   *
-   * @param msg The parent message.
-   */
   async executeRequest(
     content: KernelMessage.IExecuteRequestMsg['content']
   ): Promise<KernelMessage.IExecuteReplyMsg['content']> {
     const { code } = content;
+    const html = makeIframeHtml(code, this.linkKey);
 
     this.publishExecuteResult({
       execution_count: this.executionCount,
       data: {
-        'text/plain': code
+        'text/html': html,
+        'text/plain': '[SageMathCell output]'
       },
       metadata: {}
     });
@@ -65,88 +121,47 @@ export class EchoKernel extends BaseKernel {
     };
   }
 
-  /**
-   * Handle an complete_request message
-   *
-   * @param msg The parent message.
-   */
   async completeRequest(
     content: KernelMessage.ICompleteRequestMsg['content']
-  ): Promise<KernelMessage.ICompleteReplyMsg['content']> {
+  ): Promise<KernelMessage.ICompleteReply> {
     throw new Error('Not implemented');
   }
 
-  /**
-   * Handle an `inspect_request` message.
-   *
-   * @param content - The content of the request.
-   *
-   * @returns A promise that resolves with the response message.
-   */
   async inspectRequest(
     content: KernelMessage.IInspectRequestMsg['content']
-  ): Promise<KernelMessage.IInspectReplyMsg['content']> {
+  ): Promise<KernelMessage.IInspectReply> {
     throw new Error('Not implemented');
   }
 
-  /**
-   * Handle an `is_complete_request` message.
-   *
-   * @param content - The content of the request.
-   *
-   * @returns A promise that resolves with the response message.
-   */
   async isCompleteRequest(
     content: KernelMessage.IIsCompleteRequestMsg['content']
-  ): Promise<KernelMessage.IIsCompleteReplyMsg['content']> {
-    throw new Error('Not implemented');
+  ): Promise<KernelMessage.IIsCompleteReply> {
+    return {
+      status: 'complete'
+    };
   }
 
-  /**
-   * Handle a `comm_info_request` message.
-   *
-   * @param content - The content of the request.
-   *
-   * @returns A promise that resolves with the response message.
-   */
   async commInfoRequest(
     content: KernelMessage.ICommInfoRequestMsg['content']
-  ): Promise<KernelMessage.ICommInfoReplyMsg['content']> {
-    throw new Error('Not implemented');
+  ): Promise<KernelMessage.ICommInfoReply> {
+    return {
+      status: 'ok',
+      comms: {}
+    };
   }
 
-  /**
-   * Send an `input_reply` message.
-   *
-   * @param content - The content of the reply.
-   */
   inputReply(content: KernelMessage.IInputReplyMsg['content']): void {
     throw new Error('Not implemented');
   }
 
-  /**
-   * Send an `comm_open` message.
-   *
-   * @param msg - The comm_open message.
-   */
   async commOpen(msg: KernelMessage.ICommOpenMsg): Promise<void> {
     throw new Error('Not implemented');
   }
 
-  /**
-   * Send an `comm_msg` message.
-   *
-   * @param msg - The comm_msg message.
-   */
   async commMsg(msg: KernelMessage.ICommMsgMsg): Promise<void> {
     throw new Error('Not implemented');
   }
 
-  /**
-   * Send an `comm_close` message.
-   *
-   * @param close - The comm_close message.
-   */
   async commClose(msg: KernelMessage.ICommCloseMsg): Promise<void> {
     throw new Error('Not implemented');
   }

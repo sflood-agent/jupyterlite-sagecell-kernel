@@ -1,0 +1,13 @@
+try:
+    from ._version import __version__
+except ImportError:
+    import warnings
+
+    warnings.warn(
+        "Importing 'jupyterlite_sagecell_kernel' outside a proper installation."
+    )
+    __version__ = "dev"
+
+
+def _jupyter_labextension_paths():
+    return [{"src": "labextension", "dest": "@jupyterlite/sagecell-kernel"}]

@@ -5,26 +5,20 @@ import {
   JupyterFrontEnd,
   JupyterFrontEndPlugin
 } from '@jupyterlab/application';
-
 import type { IKernel } from '@jupyterlite/services';
-
 import { IKernelSpecs } from '@jupyterlite/services';
+import { SageCellKernel } from './kernel';
 
-import { EchoKernel } from './kernel';
-
-/**
- * A plugin to register the echo kernel.
- */
 const kernel: JupyterFrontEndPlugin<void> = {
-  id: '@jupyterlite/echo-kernel:kernel',
+  id: '@jupyterlite/sagecell-kernel:kernel',
   autoStart: true,
   requires: [IKernelSpecs],
   activate: (app: JupyterFrontEnd, kernelspecs: IKernelSpecs) => {
     kernelspecs.register({
       spec: {
-        name: 'echo',
-        display_name: 'Echo',
-        language: 'text',
+        name: 'sagecell',
+        display_name: 'SageCell (remote)',
+        language: 'sage',
         argv: [],
         resources: {
           'logo-32x32': '',
@@ -32,12 +26,11 @@ const kernel: JupyterFrontEndPlugin<void> = {
         }
       },
       create: async (options: IKernel.IOptions): Promise<IKernel> => {
-        return new EchoKernel(options);
+        return new SageCellKernel(options);
       }
     });
   }
 };
 
-const plugins: JupyterFrontEndPlugin<any>[] = [kernel];
-
+const plugins: JupyterFrontEndPlugin[] = [kernel];
 export default plugins;
