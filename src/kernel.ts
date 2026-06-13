@@ -7,6 +7,33 @@ import { BaseKernel } from '@jupyterlite/services';
 const SAGECELL_SERVER = 'https://sagecell.sagemath.org';
 const DEFAULT_HEIGHT = 520;
 
+// Each output lives in its own iframe, so SageCell's linked-cell registry cannot
+// share a live session between executions. Replaying prior submissions rebuilds
+// the notebook state while redirected streams keep earlier text output hidden.
+function makeStatefulCode(history: readonly string[], code: string): string {
+  if (history.length === 0) {
+    return code;
+  }
+
+  const replay = JSON.stringify(history);
+
+  return `import contextlib as _jupyterlite_contextlib
+import io as _jupyterlite_io
+
+for _jupyterlite_code in ${replay}:
+    try:
+        with _jupyterlite_contextlib.redirect_stdout(_jupyterlite_io.StringIO()), _jupyterlite_contextlib.redirect_stderr(_jupyterlite_io.StringIO()):
+            exec(preparse(_jupyterlite_code), globals())
+    except Exception:
+        pass
+
+del _jupyterlite_code
+del _jupyterlite_contextlib
+del _jupyterlite_io
+
+${code}`;
+}
+
 function escapeHtmlAttr(value: string): string {
   return value
     .replace(/&/g, '&amp;')
@@ -20,7 +47,7 @@ function makeIframeHtml(
   linkKey: string,
   height = DEFAULT_HEIGHT
 ): string {
-  const inner = `@doctype html
+  const inner = `<!doctype html>
 <html>
 <head>
   <meta charset="utf-8" />
@@ -68,6 +95,7 @@ function makeIframeHtml(
 }
 
 export class SageCellKernel extends BaseKernel {
+  private readonly executionHistory: string[] = [];
   private readonly linkKey = crypto.randomUUID();
 
   async kernelInfoRequest(): Promise<KernelMessage.IInfoReply> {
@@ -103,7 +131,10 @@ export class SageCellKernel extends BaseKernel {
     content: KernelMessage.IExecuteRequestMsg['content']
   ): Promise<KernelMessage.IExecuteReplyMsg['content']> {
     const { code } = content;
-    const html = makeIframeHtml(code, this.linkKey);
+    const statefulCode = makeStatefulCode(this.executionHistory, code);
+    const html = makeIframeHtml(statefulCode, this.linkKey);
+
+    this.executionHistory.push(code);
 
     this.publishExecuteResult({
       execution_count: this.executionCount,
