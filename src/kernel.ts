@@ -123,7 +123,7 @@ export class SageCellKernel extends BaseKernel {
 
   async completeRequest(
     content: KernelMessage.ICompleteRequestMsg['content']
-  ): Promise<KernelMessage.ICompleteReply> {
+  ): Promise<KernelMessage.ICompleteReplyMsg['content']> {
     throw new Error('Not implemented');
   }
 
@@ -135,7 +135,7 @@ export class SageCellKernel extends BaseKernel {
 
   async isCompleteRequest(
     content: KernelMessage.IIsCompleteRequestMsg['content']
-  ): Promise<KernelMessage.IIsCompleteReply> {
+  ): Promise<KernelMessage.IIsCompleteReplyMsg['content']> {
     return {
       status: 'complete'
     };
