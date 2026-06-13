@@ -1,97 +1,85 @@
-# jupyterlite-sagecell-kernel
+# Custom SageCell Kernel
 
-A remote SageCell wrapper kernel for JupyterLite. The kernel sends each executed
-cell to [SageMathCell](https://sagecell.sagemath.org/) and displays the result in
-an iframe.
+This repository contains a custom remote SageCell kernel for JupyterLite. The
+kernel sends each executed cell to [SageMathCell](https://sagecell.sagemath.org/)
+and displays the result in an iframe.
+
+The kernel package is stored in the `jupyterlite-sagecell-kernel` subdirectory,
+and the generated JupyterLite site is tracked in `_output` for convenient
+deployment.
+
+> **Note:** Building the kernel and JupyterLite site can require a significant
+> amount of memory. Do not run this process on a computer with limited RAM.
 
 ## Requirements
 
 - JupyterLite >= 0.6.0
 - Network access to `https://sagecell.sagemath.org`
+- Conda or Mamba
+- Git
 
-## Install
+## Set up the development environment
 
-To install the extension, execute:
+Clone this repository and enter its root directory:
 
 ```bash
-pip install jupyterlite-sagecell-kernel
+git clone git@github.com:sflood-agent/jupyterlite-sagecell-kernel.git
+cd jupyterlite-sagecell-kernel
 ```
 
-Then build your JupyterLite site:
+Create and activate a dedicated environment, then install JupyterLite and
+Node.js:
 
 ```bash
+conda create -n jupyterlitesage python=3.12
+conda activate jupyterlitesage
+mamba install -c jupyterlab jupyterlite-core nodejs
+```
+
+Confirm that `python` and `pip` resolve to the newly activated environment
+before continuing:
+
+```bash
+which python
+which pip
+```
+
+## Install the kernel and build the site
+
+From the repository root, install the kernel package from its subdirectory and
+build the JupyterLite site:
+
+```bash
+pip install -e jupyterlite-sagecell-kernel
 jupyter lite build
 ```
 
-Select **SageCell (remote)** when creating a notebook or choosing a kernel.
+The generated site is written to `_output`.
 
-## Uninstall
+## Preview and deploy
 
-To remove the extension, execute:
+Preview the generated site locally:
+
+```bash
+jupyter lite serve
+```
+
+To deploy the site, copy the contents of `_output` to the relevant directory on
+the server.
+
+## Rebuild after editing the kernel
+
+After editing the Jupyter kernel, run all three commands from the repository
+root to reinstall the package, rebuild the site, and preview the result:
+
+```bash
+pip install -e jupyterlite-sagecell-kernel
+jupyter lite build
+jupyter lite serve
+```
+
+## Development uninstall
 
 ```bash
 pip uninstall jupyterlite-sagecell-kernel
 ```
-
-## Contributing
-
-### Development install
-
-An editable install builds the TypeScript extension from source, so Node.js and
-npm must be installed and available on `PATH` before running `pip install -e .`.
-For example, install them into the active conda environment with:
-
-```bash
-conda install -c conda-forge nodejs
-```
-
-Verify that both executables are available, then install the package:
-
-```bash
-node --version
-npm --version
-
-# Clone the repo to your local environment
-# Change directory to the jupyterlite-sagecell-kernel directory
-# Install package in development mode
-python -m pip install -e .
-
-# Link your development version of the extension with JupyterLab
-jupyter labextension develop . --overwrite
-
-# Rebuild extension Typescript source after making changes
-jlpm run build
-```
-
-The `jlpm` command is JupyterLab's pinned version of
-[yarn](https://yarnpkg.com/) and is installed with JupyterLab. The editable
-build runs `jlpm` in an isolated Python build environment, but `node` and `npm`
-must still be installed separately on the system or in the active environment.
-If editable-install metadata generation fails with `Please install Node.js and
-npm before continuing installation`, install Node.js as shown above, confirm
-that `node --version` succeeds in the same shell, and retry the install.
-
-You can watch the source directory and run JupyterLab at the same time in different terminals to watch for changes in the extension's source and automatically rebuild the extension.
-
-```bash
-# Watch the source directory in one terminal, automatically rebuilding when needed
-jlpm run watch
-# Run JupyterLab in another terminal
-jupyter lab
-```
-
-With the watch command running, every saved change will immediately be built locally and available in your running JupyterLab. Refresh JupyterLab to load the change in your browser (you may need to wait several seconds for the extension to be rebuilt).
-
-### Development uninstall
-
-```bash
-pip uninstall jupyterlite-sagecell-kernel
-```
-
-In development mode, you will also need to remove the symlink created by `jupyter labextension develop`
-command. To find its location, you can run `jupyter labextension list` to figure out where the `labextensions`
-folder is located. Then you can remove the symlink named `@jupyterlite/sagecell-kernel` within that folder.
-
-### Packaging the extension
-
-See [RELEASE](RELEASE.md)

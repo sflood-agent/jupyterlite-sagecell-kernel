@@ -4,10 +4,22 @@
 import type { KernelMessage } from '@jupyterlab/services';
 import { BaseKernel } from '@jupyterlite/services';
 
+/** Base URL used by the HTML output to load SageMathCell's embed client. */
 const SAGECELL_SERVER = 'https://sagecell.sagemath.org';
-// Each output lives in its own iframe, so SageCell's linked-cell registry cannot
-// share a live session between executions. Replaying prior submissions rebuilds
-// the notebook state while redirected streams keep earlier text output hidden.
+
+/**
+ * Build the Sage source sent for one execution.
+ *
+ * A normal Jupyter kernel is a long-running process, so variables created by an
+ * earlier cell remain available to later cells. This browser-side wrapper does
+ * not run Sage itself: every output iframe starts a separate remote SageCell.
+ * To imitate a persistent kernel, this function silently replays the source of
+ * successful and failed earlier submissions before running the current cell.
+ *
+ * Each output lives in its own iframe, so SageCell's linked-cell registry cannot
+ * share a live session between executions. Replaying prior submissions rebuilds
+ * the notebook state while redirected streams keep earlier text output hidden.
+ */
 function makeStatefulCode(history: readonly string[], code: string): string {
   if (history.length === 0) {
     return code;
@@ -32,6 +44,10 @@ del _jupyterlite_io
 ${code}`;
 }
 
+/**
+ * Escape a complete HTML document so it can safely be placed in an iframe's
+ * double-quoted `srcdoc` attribute.
+ */
 function escapeHtmlAttr(value: string): string {
   return value
     .replace(/&/g, '&amp;')
@@ -40,7 +56,17 @@ function escapeHtmlAttr(value: string): string {
     .replace(/>/g, '&gt;');
 }
 
+/**
+ * Create the HTML output published for an executed notebook cell.
+ *
+ * Jupyter display messages can contain several MIME representations. This
+ * kernel publishes this iframe as `text/html`; the iframe then loads the
+ * SageMathCell embed client, submits `code`, and displays the remote result.
+ * Keeping SageCell in an iframe also isolates its scripts and styles from the
+ * surrounding JupyterLite application.
+ */
 function makeIframeHtml(code: string, linkKey: string): string {
+  // This document runs inside the output iframe, not in JupyterLite's page.
   const inner = `<!doctype html>
 <html>
 <head>
@@ -98,15 +124,34 @@ function makeIframeHtml(code: string, linkKey: string): string {
 </body>
 </html>`;
 
+  // The iframe begins at one pixel high. Its embedded ResizeObserver expands it
+  // after SageCell renders a result, avoiding a large blank output area.
   const srcdoc = escapeHtmlAttr(inner);
 
   return `<iframe style="display:block; width:100%; height:1px; border:0;" referrerpolicy="no-referrer" srcdoc="${srcdoc}"></iframe>`;
 }
 
+/**
+ * A JupyterLite kernel that delegates Sage execution to SageMathCell.
+ *
+ * `BaseKernel` receives Jupyter protocol messages from the notebook UI and
+ * calls the corresponding request methods below. Unlike a traditional Jupyter
+ * kernel, this class lives entirely in the browser and does not directly run a
+ * Sage interpreter.
+ */
 export class SageCellKernel extends BaseKernel {
+  // Source is retained so later executions can recreate the notebook's state.
   private readonly executionHistory: string[] = [];
+
+  // SageCell uses this key to identify cells belonging to this kernel instance.
   private readonly linkKey = crypto.randomUUID();
 
+  /**
+   * Describe this kernel and its language to the Jupyter frontend.
+   *
+   * The frontend uses this reply for items such as syntax highlighting, file
+   * extensions, the kernel banner, and help links.
+   */
   async kernelInfoRequest(): Promise<KernelMessage.IInfoReply> {
     return {
       implementation: 'SageCell Remote Wrapper',
@@ -136,6 +181,13 @@ export class SageCellKernel extends BaseKernel {
     };
   }
 
+  /**
+   * Handle a notebook's request to execute a code cell.
+   *
+   * The method does not wait for SageMathCell to finish. Instead, it publishes
+   * an HTML display result containing an auto-evaluating iframe and immediately
+   * acknowledges the Jupyter execute request.
+   */
   async executeRequest(
     content: KernelMessage.IExecuteRequestMsg['content']
   ): Promise<KernelMessage.IExecuteReplyMsg['content']> {
@@ -143,8 +195,12 @@ export class SageCellKernel extends BaseKernel {
     const statefulCode = makeStatefulCode(this.executionHistory, code);
     const html = makeIframeHtml(statefulCode, this.linkKey);
 
+    // Record the original source only after preparing this execution; otherwise
+    // the current cell would be included in its own replay.
     this.executionHistory.push(code);
 
+    // Display data travels on Jupyter's IOPub channel. Browsers render the HTML
+    // representation, while text-only clients can use the plain-text fallback.
     this.publishExecuteResult({
       execution_count: this.executionCount,
       data: {
@@ -154,6 +210,8 @@ export class SageCellKernel extends BaseKernel {
       metadata: {}
     });
 
+    // This reply travels on the shell channel and tells the frontend that the
+    // request itself was accepted. The iframe owns the remote execution result.
     return {
       status: 'ok',
       execution_count: this.executionCount,
@@ -161,18 +219,25 @@ export class SageCellKernel extends BaseKernel {
     };
   }
 
+  /** Code completion is not currently forwarded to SageMathCell. */
   async completeRequest(
     content: KernelMessage.ICompleteRequestMsg['content']
   ): Promise<KernelMessage.ICompleteReplyMsg['content']> {
     throw new Error('Not implemented');
   }
 
+  /** Object inspection/help lookup is not currently supported. */
   async inspectRequest(
     content: KernelMessage.IInspectRequestMsg['content']
   ): Promise<KernelMessage.IInspectReply> {
     throw new Error('Not implemented');
   }
 
+  /**
+   * Tell the frontend that submitted source is ready to execute.
+   *
+   * This simple implementation does not parse Sage to detect incomplete blocks.
+   */
   async isCompleteRequest(
     content: KernelMessage.IIsCompleteRequestMsg['content']
   ): Promise<KernelMessage.IIsCompleteReplyMsg['content']> {
@@ -181,6 +246,9 @@ export class SageCellKernel extends BaseKernel {
     };
   }
 
+  /**
+   * Report that this kernel has no open Jupyter widget communication channels.
+   */
   async commInfoRequest(
     content: KernelMessage.ICommInfoRequestMsg['content']
   ): Promise<KernelMessage.ICommInfoReply> {
@@ -190,18 +258,22 @@ export class SageCellKernel extends BaseKernel {
     };
   }
 
+  /** Interactive stdin replies are not supported by the iframe wrapper. */
   inputReply(content: KernelMessage.IInputReplyMsg['content']): void {
     throw new Error('Not implemented');
   }
 
+  /** Jupyter widget/comm messages are not supported by this kernel. */
   async commOpen(msg: KernelMessage.ICommOpenMsg): Promise<void> {
     throw new Error('Not implemented');
   }
 
+  /** Jupyter widget/comm messages are not supported by this kernel. */
   async commMsg(msg: KernelMessage.ICommMsgMsg): Promise<void> {
     throw new Error('Not implemented');
   }
 
+  /** Jupyter widget/comm messages are not supported by this kernel. */
   async commClose(msg: KernelMessage.ICommCloseMsg): Promise<void> {
     throw new Error('Not implemented');
   }
