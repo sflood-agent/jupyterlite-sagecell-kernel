@@ -125,4 +125,4 @@ dmypy.json
 
 # JupyterLite
 .jupyterlite.doit.db
-_output/
+#_output/
