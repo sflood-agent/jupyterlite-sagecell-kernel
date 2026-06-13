@@ -32,5 +32,5 @@ const kernel: JupyterFrontEndPlugin<void> = {
   }
 };
 
-const plugins: JupyterFrontEndPlugin[] = [kernel];
+const plugins: JupyterFrontEndPlugin<void>[] = [kernel];
 export default plugins;

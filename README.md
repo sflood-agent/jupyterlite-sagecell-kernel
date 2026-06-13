@@ -37,13 +37,20 @@ pip uninstall jupyterlite-sagecell-kernel
 
 ### Development install
 
-Note: You will need NodeJS to build the extension package.
-
-The `jlpm` command is JupyterLab's pinned version of
-[yarn](https://yarnpkg.com/) that is installed with JupyterLab. You may use
-`yarn` or `npm` in lieu of `jlpm` below.
+An editable install builds the TypeScript extension from source, so Node.js and
+npm must be installed and available on `PATH` before running `pip install -e .`.
+For example, install them into the active conda environment with:
 
 ```bash
+conda install -c conda-forge nodejs
+```
+
+Verify that both executables are available, then install the package:
+
+```bash
+node --version
+npm --version
+
 # Clone the repo to your local environment
 # Change directory to the jupyterlite-sagecell-kernel directory
 # Install package in development mode
@@ -55,6 +62,14 @@ jupyter labextension develop . --overwrite
 # Rebuild extension Typescript source after making changes
 jlpm run build
 ```
+
+The `jlpm` command is JupyterLab's pinned version of
+[yarn](https://yarnpkg.com/) and is installed with JupyterLab. The editable
+build runs `jlpm` in an isolated Python build environment, but `node` and `npm`
+must still be installed separately on the system or in the active environment.
+If editable-install metadata generation fails with `Please install Node.js and
+npm before continuing installation`, install Node.js as shown above, confirm
+that `node --version` succeeds in the same shell, and retry the install.
 
 You can watch the source directory and run JupyterLab at the same time in different terminals to watch for changes in the extension's source and automatically rebuild the extension.
 
