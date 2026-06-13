@@ -5,8 +5,6 @@ import type { KernelMessage } from '@jupyterlab/services';
 import { BaseKernel } from '@jupyterlite/services';
 
 const SAGECELL_SERVER = 'https://sagecell.sagemath.org';
-const DEFAULT_HEIGHT = 520;
-
 // Each output lives in its own iframe, so SageCell's linked-cell registry cannot
 // share a live session between executions. Replaying prior submissions rebuilds
 // the notebook state while redirected streams keep earlier text output hidden.
@@ -42,11 +40,7 @@ function escapeHtmlAttr(value: string): string {
     .replace(/>/g, '&gt;');
 }
 
-function makeIframeHtml(
-  code: string,
-  linkKey: string,
-  height = DEFAULT_HEIGHT
-): string {
+function makeIframeHtml(code: string, linkKey: string): string {
   const inner = `<!doctype html>
 <html>
 <head>
@@ -57,6 +51,7 @@ function makeIframeHtml(
     html, body {
       margin: 0;
       padding: 0;
+      overflow: hidden;
       background: white;
       font-family: sans-serif;
     }
@@ -70,6 +65,20 @@ function makeIframeHtml(
   <script>
     const host = document.getElementById('host');
     const code = ${JSON.stringify(code)};
+    const frame = window.frameElement;
+    let resizeFrame = 0;
+
+    const fitFrameToContent = () => {
+      cancelAnimationFrame(resizeFrame);
+      resizeFrame = requestAnimationFrame(() => {
+        if (frame) {
+          frame.style.height = Math.ceil(host.getBoundingClientRect().bottom) + 'px';
+        }
+      });
+    };
+
+    new ResizeObserver(fitFrameToContent).observe(host);
+    fitFrameToContent();
 
     const scriptTag = document.createElement('script');
     scriptTag.type = 'text/x-sage';
@@ -91,7 +100,7 @@ function makeIframeHtml(
 
   const srcdoc = escapeHtmlAttr(inner);
 
-  return `<iframe style="width:100%; min-height:${height}px; border:0;" referrerpolicy="no-referrer" srcdoc="${srcdoc}"></iframe>`;
+  return `<iframe style="display:block; width:100%; height:1px; border:0;" referrerpolicy="no-referrer" srcdoc="${srcdoc}"></iframe>`;
 }
 
 export class SageCellKernel extends BaseKernel {
